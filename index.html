@@ -98,20 +98,24 @@
   .day.today .num .mo { color: inherit; }
 
   .events { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 3px; padding: 0 6px; }
-  .ev {
-    --c: var(--accent);
-    flex: none; display: block; width: 100%; min-width: 0; padding: 3px 6px 3px 8px; border-radius: 6px;
-    background: color-mix(in srgb, var(--c) 10%, var(--bg));
-    box-shadow: inset 2.5px 0 0 var(--c);
-    line-height: 1.3; transition: background .15s, opacity .15s;
-  }
-  .ev:hover { background: color-mix(in srgb, var(--c) 18%, var(--bg)); }
+  .ev { --c: var(--accent); flex: none; width: 100%; min-width: 0; border-radius: 6px; line-height: 1.3; transition: background .15s, opacity .15s; }
   .ev .t, .ev .n { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .ev .t { font-size: 10.5px; font-weight: 500; letter-spacing: .01em; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--c) 62%, #000); }
   .ev .n { font-size: 12px; font-weight: 500; }
-  .ev.allday { background: color-mix(in srgb, var(--c) 20%, var(--bg)); box-shadow: none; padding-left: 7px; }
-  .ev.allday:hover { background: color-mix(in srgb, var(--c) 28%, var(--bg)); }
+  /* Activité avec horaire : pastille de couleur, heure, titre */
+  .ev.timed { display: grid; grid-template-columns: 6px minmax(0, 1fr); column-gap: 6px; align-items: center; padding: 2px 6px; }
+  button.ev.timed:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+  .ev .dot { grid-row: 1; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+  .ev .t { grid-column: 2; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .ev.timed .n { grid-column: 2; }
+  /* Journée entière : bandeau teinté */
+  .ev.allday { display: block; padding: 3px 7px; background: color-mix(in srgb, var(--c) 18%, var(--bg)); }
+  button.ev.allday:hover { background: color-mix(in srgb, var(--c) 26%, var(--bg)); }
   .ev.allday .n { font-weight: 600; color: color-mix(in srgb, var(--c) 55%, #000); }
+  /* Activité privée : seul le créneau est visible */
+  .ev.private .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+  .ev.private .n { color: var(--muted); }
+  .ev.allday.private { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--text) 5%, transparent) 0 4px, color-mix(in srgb, var(--text) 2%, transparent) 4px 8px); }
+  .ev.allday.private .n { font-weight: 500; }
   /* Événements de plusieurs jours : la barre rejoint le bord de la case */
   .ev.cont-l { margin-left: -6px; width: calc(100% + 6px); border-top-left-radius: 0; border-bottom-left-radius: 0; }
   .ev.cont-r { margin-right: -6px; width: calc(100% + 6px); border-top-right-radius: 0; border-bottom-right-radius: 0; }
@@ -124,9 +128,8 @@
   .more:hover { color: var(--accent); background: color-mix(in srgb, var(--text) 5%, transparent); }
   /* Cases larges : heure et titre sur une seule ligne */
   @container (min-width: 210px) {
-    .ev:not(.allday) { display: flex; align-items: baseline; gap: 8px; }
-    .ev:not(.allday) .t { flex: none; }
-    .ev:not(.allday) .n { flex: 1; min-width: 0; }
+    .ev.timed { grid-template-columns: 6px auto minmax(0, 1fr); }
+    .ev.timed .n { grid-column: 3; grid-row: 1; }
   }
 
   .dots { display: none; }
@@ -139,26 +142,28 @@
 
   /* ── Liste (petits écrans) ── */
   .agenda { display: none; }
-  .ag-day { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .ag-day { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); }
   .ag-day:first-child { border-top: 0; }
-  .ag-date { text-align: center; line-height: 1.1; padding-top: 2px; }
+  .ag-date { text-align: center; line-height: 1.1; padding-top: 8px; }
   .ag-dow { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
   .ag-num { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; margin-top: 3px; border-radius: 17px; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .ag-day.today .ag-num { background: var(--accent); color: #fff; }
   .ag-day.flash .ag-ev { animation: flash 1.2s ease-out; }
   @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); } }
-  .ag-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .ag-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .ag-ev {
     --c: var(--accent);
-    display: flex; gap: 11px; width: 100%; padding: 10px 12px; border-radius: 10px;
-    background: color-mix(in srgb, var(--c) 8%, var(--panel)); transition: background .15s;
+    display: grid; grid-template-columns: 8px minmax(0, 1fr); column-gap: 11px; row-gap: 2px; align-items: center;
+    width: 100%; padding: 8px 10px; border-radius: 10px; transition: background .15s;
   }
-  .ag-ev:hover { background: color-mix(in srgb, var(--c) 14%, var(--panel)); }
-  .ag-ev::before { content: ""; flex: none; width: 3px; border-radius: 2px; background: var(--c); }
-  .ag-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .ag-ev .n { font-size: 14.5px; font-weight: 600; line-height: 1.3; }
-  .ag-ev .t { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--c) 62%, #000); }
+  button.ag-ev:hover { background: var(--surface); }
+  .ag-ev .dot { grid-row: 1; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .ag-ev .n, .ag-ev .t, .ag-ev .l { grid-column: 2; min-width: 0; }
+  .ag-ev .n { font-size: 15px; font-weight: 600; line-height: 1.3; }
+  .ag-ev .t { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--text) 78%, var(--panel)); }
   .ag-ev .l { font-size: 12.5px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .ag-ev.private .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+  .ag-ev.private .n { color: var(--muted); font-weight: 500; }
   .ag-ev.past { opacity: .55; }
   .ag-empty { margin: 20px 0 8px; text-align: center; color: var(--muted); font-size: 14px; }
   .agenda:not(.show-past) .ag-day.ag-past { display: none; }
@@ -186,7 +191,7 @@
   .back:hover { background: var(--surface); color: var(--text); }
   .back svg { width: 16px; height: 16px; }
   .d-head { --c: var(--accent); display: flex; gap: 12px; padding-right: 36px; margin-bottom: 16px; }
-  .d-head::before { content: ""; flex: none; width: 12px; height: 12px; margin: 7px 2px 0; border-radius: 4px; background: var(--c); }
+  .d-head::before { content: ""; flex: none; width: 10px; height: 10px; margin: 8px 3px 0; border-radius: 50%; background: var(--c); }
   .d-head.plain::before { display: none; }
   .d-head h2 { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
   .d-kicker { margin: 0 0 2px; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
@@ -234,6 +239,7 @@
     .events, .empty { display: none; }
     .dots { display: flex; gap: 3px; height: 5px; margin-top: 3px; }
     .dots i { --c: var(--accent); width: 5px; height: 5px; border-radius: 50%; background: var(--c); }
+    .dots i.private { background: transparent; box-shadow: inset 0 0 0 1.2px var(--muted); }
     .day.out .dots { opacity: .5; }
     .agenda { display: block; margin-top: 6px; }
     dialog { width: calc(100vw - 16px); }
@@ -361,7 +367,7 @@ async function fetchItems(g) {
     // Marge d'un jour de chaque côté : le tri par jour se fait ensuite dans le fuseau du calendrier
     timeMin: new Date(keyToUTC(g.start) - DAY).toISOString(),
     timeMax: new Date(keyToUTC(g.end) + DAY).toISOString(),
-    fields: 'nextPageToken,items(id,status,summary,description,location,colorId,start,end)',
+    fields: 'nextPageToken,items(id,status,visibility,summary,description,location,colorId,start,end)',
   });
   const items = [];
   let token;
@@ -382,12 +388,17 @@ const EVENTS = new Map();
 function normalize(item) {
   if (item.status === 'cancelled' || !item.start) return null;
   const allDay = !!item.start.date;
+  // Événement marqué « Privé » dans Google Agenda : Google n'en publie que le créneau.
+  // Un événement sans titre ni détail est traité de la même façon.
+  const isPrivate = item.visibility === 'private' || item.visibility === 'confidential'
+    || !(item.summary || item.description || item.location);
   const ev = {
     id: item.id,
-    title: (item.summary || '').trim() || 'Sans titre',
-    description: (item.description || '').trim(),
-    location: (item.location || '').trim(),
-    color: COLORS[item.colorId] || null,
+    private: isPrivate,
+    title: isPrivate ? 'Réservé' : (item.summary || '').trim() || 'Sans titre',
+    description: isPrivate ? '' : (item.description || '').trim(),
+    location: isPrivate ? '' : (item.location || '').trim(),
+    color: isPrivate ? null : COLORS[item.colorId] || null,
     allDay,
   };
   if (allDay) {
@@ -474,26 +485,30 @@ function spanLabel(ev) {
 }
 const agendaLabel = (ev, pos) => timeLabel(ev, pos) || (ev.startKey === ev.endKey ? 'Toute la journée' : spanLabel(ev));
 
+// Élément cliquable, sauf pour une activité privée (il n'y a rien de plus à montrer)
+function eventTag(ev, cls, attrs, inner) {
+  return ev.private
+    ? `<div class="${cls} private"${colorVar(ev)}${attrs}>${inner}</div>`
+    : `<button class="${cls}" data-ev="${esc(ev.id)}"${colorVar(ev)}${attrs}>${inner}</button>`;
+}
+
 function chip({ ev, pos }, now, today) {
-  const cls = ['ev'];
+  const cls = ['ev', ev.allDay ? 'allday' : 'timed'];
   if (ev.allDay) {
-    cls.push('allday');
     if (pos === 'middle' || pos === 'end') cls.push('cont-l');
     if (pos === 'middle' || pos === 'start') cls.push('cont-r');
   }
   if (isPast(ev, now, today)) cls.push('past');
   const time = timeLabel(ev, pos);
   const tip = time ? `${time} · ${ev.title}` : ev.title;
-  return `<button class="${cls.join(' ')}" data-ev="${esc(ev.id)}"${colorVar(ev)} title="${esc(tip)}">`
-    + (time ? `<span class="t">${time}</span>` : '')
-    + `<span class="n">${esc(ev.title)}</span></button>`;
+  return eventTag(ev, cls.join(' '), ` title="${esc(tip)}"`,
+    (time ? `<i class="dot"></i><span class="t">${time}</span>` : '') + `<span class="n">${esc(ev.title)}</span>`);
 }
 
 function agendaItem({ ev, pos }, now, today, from) {
-  return `<button class="ag-ev${isPast(ev, now, today) ? ' past' : ''}" data-ev="${esc(ev.id)}"${from ? ` data-from="${from}"` : ''}${colorVar(ev)}>`
-    + `<span class="ag-body"><span class="n">${esc(ev.title)}</span><span class="t">${agendaLabel(ev, pos)}</span>`
-    + (ev.location ? `<span class="l">${esc(ev.location)}</span>` : '')
-    + `</span></button>`;
+  return eventTag(ev, `ag-ev${isPast(ev, now, today) ? ' past' : ''}`, from ? ` data-from="${from}"` : '',
+    `<i class="dot"></i><span class="n">${esc(ev.title)}</span><span class="t">${agendaLabel(ev, pos)}</span>`
+    + (ev.location ? `<span class="l">${esc(ev.location)}</span>` : ''));
 }
 
 function renderHeader(g) {
@@ -523,7 +538,7 @@ function paint(g, data) {
     html += `<div class="${cls.join(' ')}" data-day="${k}">`
       + (list.length ? `<button class="num" data-day-open="${k}" aria-label="${aria}">${label}</button>` : `<span class="num">${label}</span>`)
       + `<div class="events">${list.map(o => chip(o, now, today)).join('')}<button class="more is-hidden" data-day-open="${k}"></button></div>`
-      + `<div class="dots" aria-hidden="true">${list.slice(0, 3).map(o => `<i${colorVar(o.ev)}></i>`).join('')}</div>`
+      + `<div class="dots" aria-hidden="true">${list.slice(0, 3).map(o => `<i${o.ev.private ? ' class="private"' : ''}${colorVar(o.ev)}></i>`).join('')}</div>`
       + `</div>`;
   }
   grid.innerHTML = html;
@@ -858,6 +873,8 @@ function demoItems(g) {
     timed('apero', busy, [17, 0], [18, 30], 'Apéro des membres', { colorId: '4' });
     timed('soiree', busy, [21, 0], [1, 0], 'Soirée dansante', { colorId: '3', location: 'Salle communautaire du Plateau' });
     timed('cine', wed[3] || wed[2], [19, 30], [22, 0], 'Ciné-club : cinéma québécois', { colorId: '1' });
+    timed('prive', thu[0], [13, 0], [17, 0], 'Location de salle', { visibility: 'private' });
+    allDay('prive-j', mon[2], 1, undefined, { visibility: 'private' });
   }
   return items;
 }
