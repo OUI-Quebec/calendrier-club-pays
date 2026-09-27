@@ -126,6 +126,11 @@
   .ev.past:hover { opacity: .85; }
   .more { flex: none; align-self: flex-start; font-size: 11.5px; font-weight: 500; color: var(--muted); padding: 2px 6px; margin-left: -2px; border-radius: 5px; }
   .more:hover { color: var(--accent); background: color-mix(in srgb, var(--text) 5%, transparent); }
+  /* Miniature : activité seule dans sa journée, avec une image */
+  .thumb { position: relative; flex: 1 1 0; min-height: 0; margin-top: 2px; border-radius: 6px; overflow: hidden; background: var(--surface); }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .3s ease; }
+  .thumb:hover img { transform: scale(1.03); }
+  .thumb.past { opacity: .55; }
   /* Cases larges : heure et titre sur une seule ligne */
   @container (min-width: 210px) {
     .ev.timed { grid-template-columns: 6px auto minmax(0, 1fr); }
@@ -165,6 +170,8 @@
   .ag-ev.private .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
   .ag-ev.private .n { color: var(--muted); font-weight: 500; }
   .ag-ev.past { opacity: .55; }
+  .ag-ev.has-img { grid-template-columns: 8px minmax(0, 1fr) 56px; }
+  .ag-thumb { grid-column: 3; grid-row: 1 / span 3; align-self: center; width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: var(--surface); }
   .ag-empty { margin: 20px 0 8px; text-align: center; color: var(--muted); font-size: 14px; }
   .agenda:not(.show-past) .ag-day.ag-past { display: none; }
   .agenda.show-past .past-toggle { display: none; }
@@ -193,6 +200,10 @@
   .d-head { --c: var(--accent); display: flex; gap: 12px; padding-right: 36px; margin-bottom: 16px; }
   .d-head::before { content: ""; flex: none; width: 10px; height: 10px; margin: 8px 3px 0; border-radius: 50%; background: var(--c); }
   .d-head.plain::before { display: none; }
+  .d-img { display: block; margin: -22px -22px 18px; background: var(--surface); }
+  .d-img img { display: block; width: 100%; max-height: min(320px, 45dvh); object-fit: contain; }
+  .dlg.has-img .close { background: color-mix(in srgb, var(--panel) 88%, transparent); box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+  .dlg.has-img .close:hover { background: var(--panel); }
   .d-head h2 { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
   .d-kicker { margin: 0 0 2px; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
   .d-meta { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
@@ -244,6 +255,7 @@
     .agenda { display: block; margin-top: 6px; }
     dialog { width: calc(100vw - 16px); }
     .dlg { padding: 20px 18px 18px; }
+    .d-img { margin: -20px -18px 16px; }
   }
 </style>
 </head>
@@ -287,6 +299,7 @@ const LOCALE = 'fr-CA';
 const DAY = 864e5;
 const TTL = 5 * 60e3; // durée de vie du cache d'un mois
 const DEMO = new URLSearchParams(location.search).has('demo');
+const DEMO_IMAGE = new URL('demo-affiche.svg', location.href).href;
 
 // Couleurs d'événement de Google Agenda (colorId → teinte)
 const COLORS = { 1: '#7986cb', 2: '#33b679', 3: '#8e24aa', 4: '#e67c73', 5: '#f6bf26', 6: '#f4511e', 7: '#039be5', 8: '#616161', 9: '#3f51b5', 10: '#0b8043', 11: '#d50000' };
@@ -384,6 +397,36 @@ async function fetchItems(g) {
   return items;
 }
 
+/* Ligne « Image : https://… » dans la description : image de l'activité.
+   Google Agenda transforme souvent l'adresse en lien HTML, d'où les variantes acceptées. */
+const INLINE = String.raw`(?:<\/?(?:b|strong|i|em|u|span|font)\b[^>]*>|&nbsp;|\s)*`;
+const INLINE_SAME_LINE = String.raw`(?:<\/?(?:b|strong|i|em|u|span|font)\b[^>]*>|&nbsp;|[ \t])*`;
+const IMAGE_LINE = new RegExp(
+  String.raw`(^|\n|<br\s*\/?>|<\/?(?:p|div|li|html-blob)\b[^>]*>)${INLINE}image${INLINE}:${INLINE}`
+  + String.raw`(?:<a\b[^>]*?\bhref\s*=\s*(["'])(.*?)\2[^>]*>[\s\S]*?<\/a>|(https?:\/\/[^\s<>"']+))${INLINE_SAME_LINE}`, 'i');
+const BROKEN_IMAGES = new Set();
+
+function imageUrl(raw) {
+  let url = new DOMParser().parseFromString(raw, 'text/html').documentElement.textContent.trim();
+  try {
+    const u = new URL(url);
+    // Lien de redirection Google (https://www.google.com/url?q=…)
+    if (/(^|\.)google\.[a-z.]+$/.test(u.hostname) && u.pathname === '/url' && u.searchParams.get('q')) url = u.searchParams.get('q');
+  } catch { return ''; }
+  // Lien de partage Google Drive → adresse d'affichage de l'image (le fichier doit être partagé publiquement)
+  const drive = url.match(/^https:\/\/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=)([\w-]{20,})/);
+  if (drive) url = `https://lh3.googleusercontent.com/d/${drive[1]}=w1200`;
+  return /^https?:\/\//i.test(url) ? url : '';
+}
+
+function extractImage(description) {
+  const m = description.match(IMAGE_LINE);
+  const image = m ? imageUrl(m[3] || m[4]) : '';
+  if (!image) return { description, image: '' };
+  const rest = description.slice(0, m.index) + description.slice(m.index + m[0].length);
+  return { description: rest.replace(/^(?:\s|<br\s*\/?>)+|(?:\s|<br\s*\/?>)+$/gi, ''), image };
+}
+
 const EVENTS = new Map();
 function normalize(item) {
   if (item.status === 'cancelled' || !item.start) return null;
@@ -392,11 +435,13 @@ function normalize(item) {
   // Un événement sans titre ni détail est traité de la même façon.
   const isPrivate = item.visibility === 'private' || item.visibility === 'confidential'
     || !(item.summary || item.description || item.location);
+  const { description, image } = extractImage(isPrivate ? '' : (item.description || '').trim());
   const ev = {
     id: item.id,
     private: isPrivate,
     title: isPrivate ? 'Réservé' : (item.summary || '').trim() || 'Sans titre',
-    description: isPrivate ? '' : (item.description || '').trim(),
+    description,
+    image,
     location: isPrivate ? '' : (item.location || '').trim(),
     color: isPrivate ? null : COLORS[item.colorId] || null,
     allDay,
@@ -505,10 +550,23 @@ function chip({ ev, pos }, now, today) {
     (time ? `<i class="dot"></i><span class="t">${time}</span>` : '') + `<span class="n">${esc(ev.title)}</span>`);
 }
 
+const hasImage = ev => ev.image && !BROKEN_IMAGES.has(ev.image);
+const imgTag = (src, cls = '', alt = '') =>
+  `<img${cls ? ` class="${cls}"` : ''} src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
+
 function agendaItem({ ev, pos }, now, today, from) {
-  return eventTag(ev, `ag-ev${isPast(ev, now, today) ? ' past' : ''}`, from ? ` data-from="${from}"` : '',
+  const img = hasImage(ev);
+  return eventTag(ev, `ag-ev${isPast(ev, now, today) ? ' past' : ''}${img ? ' has-img' : ''}`, from ? ` data-from="${from}"` : '',
     `<i class="dot"></i><span class="n">${esc(ev.title)}</span><span class="t">${agendaLabel(ev, pos)}</span>`
-    + (ev.location ? `<span class="l">${esc(ev.location)}</span>` : ''));
+    + (ev.location ? `<span class="l">${esc(ev.location)}</span>` : '')
+    + (img ? imgTag(ev.image, 'ag-thumb') : ''));
+}
+
+// Miniature dans la grille : seulement quand l'activité est seule dans sa journée
+function thumb(list, now, today) {
+  const [only] = list;
+  if (list.length !== 1 || !hasImage(only.ev) || (only.pos !== 'single' && only.pos !== 'start')) return '';
+  return `<button class="thumb${isPast(only.ev, now, today) ? ' past' : ''}" data-ev="${esc(only.ev.id)}" tabindex="-1" aria-hidden="true">${imgTag(only.ev.image)}</button>`;
 }
 
 function renderHeader(g) {
@@ -537,7 +595,7 @@ function paint(g, data) {
     const aria = `${cap(on(F.longNoYear, k))} : ${list.length} activité${list.length > 1 ? 's' : ''}`;
     html += `<div class="${cls.join(' ')}" data-day="${k}">`
       + (list.length ? `<button class="num" data-day-open="${k}" aria-label="${aria}">${label}</button>` : `<span class="num">${label}</span>`)
-      + `<div class="events">${list.map(o => chip(o, now, today)).join('')}<button class="more is-hidden" data-day-open="${k}"></button></div>`
+      + `<div class="events">${list.map(o => chip(o, now, today)).join('')}${thumb(list, now, today)}<button class="more is-hidden" data-day-open="${k}"></button></div>`
       + `<div class="dots" aria-hidden="true">${list.slice(0, 3).map(o => `<i${o.ev.private ? ' class="private"' : ''}${colorVar(o.ev)}></i>`).join('')}</div>`
       + `</div>`;
   }
@@ -570,25 +628,38 @@ function paint(g, data) {
 }
 
 // Ajuste chaque case : titres sur deux lignes si possible, sinon une ligne,
-// sinon masque les derniers événements derrière « + N autres »
+// sinon masque les derniers événements derrière « + N autres ».
+// La miniature occupe la place restante, et disparaît si elle devient trop petite.
+const THUMB_MIN = 44;
 function fitAll() {
   if (compact.matches) return;
   const fits = list => list.scrollHeight <= list.clientHeight + 1;
   for (const list of grid.querySelectorAll('.events')) {
-    const chips = list.querySelectorAll('.ev'), more = list.lastElementChild;
+    const chips = list.querySelectorAll('.ev'), more = list.lastElementChild, thumb = list.querySelector('.thumb');
     if (!chips.length) continue;
     chips.forEach(c => c.classList.remove('is-hidden'));
+    thumb?.classList.remove('is-hidden');
     more.classList.add('is-hidden');
     list.classList.add('wrap');
-    if (fits(list)) continue;
-    list.classList.remove('wrap');
-    if (fits(list)) continue;
-    more.classList.remove('is-hidden');
-    for (let i = chips.length - 1, hidden = 1; i >= 0; i--, hidden++) {
-      chips[i].classList.add('is-hidden');
-      more.textContent = `+${NB}${hidden}${NB}autre${hidden > 1 ? 's' : ''}`;
-      if (fits(list)) break;
+    if (!fits(list)) {
+      list.classList.remove('wrap');
+      if (!fits(list)) {
+        more.classList.remove('is-hidden');
+        for (let i = chips.length - 1, hidden = 1; i >= 0; i--, hidden++) {
+          chips[i].classList.add('is-hidden');
+          more.textContent = `+${NB}${hidden}${NB}autre${hidden > 1 ? 's' : ''}`;
+          if (fits(list)) break;
+        }
+      }
     }
+    if (!thumb || thumb.clientHeight >= THUMB_MIN) continue;
+    // Trop petite : on tente le titre sur une ligne, sinon on renonce à la miniature
+    if (list.classList.contains('wrap')) {
+      list.classList.remove('wrap');
+      if (thumb.clientHeight >= THUMB_MIN) continue;
+      list.classList.add('wrap');
+    }
+    thumb.classList.add('is-hidden');
   }
 }
 
@@ -629,7 +700,8 @@ function showError(err) {
 }
 
 /* ── Fenêtres de détail ────────────────────────────────────────── */
-function openDialog(html) {
+function openDialog(html, cls = '') {
+  dlgBody.className = `dlg ${cls}`.trim();
   dlgBody.innerHTML = `<button class="close" data-action="close" aria-label="Fermer">${ICON.close}</button>${html}`;
   if (!dlg.open) dlg.showModal();
   dlgBody.focus(); // focus sur le contenu plutôt que sur « Fermer » : pas d'anneau parasite à la souris
@@ -652,8 +724,10 @@ function openEvent(id, from) {
   if (!ev) return;
   const [date, time] = whenLines(ev);
   const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.location)}`;
+  const img = hasImage(ev);
   openDialog(
-    (from ? `<button class="back" data-day-open="${from}">${ICON.back}${cap(on(F.longNoYear, from))}</button>` : '')
+    (img ? `<a class="d-img" href="${esc(ev.image)}" target="_blank" rel="noopener" aria-label="Voir l’image en grand">${imgTag(ev.image, '', `Image de l’activité « ${ev.title} »`)}</a>` : '')
+    + (from ? `<button class="back" data-day-open="${from}">${ICON.back}${cap(on(F.longNoYear, from))}</button>` : '')
     + `<div class="d-head"${colorVar(ev)}><h2 id="dlg-title">${esc(ev.title)}</h2></div>`
     + `<ul class="d-meta">`
     + `<li>${ICON.cal}<span>${esc(date)}</span></li>`
@@ -664,6 +738,7 @@ function openEvent(id, from) {
     + `<div class="d-add"><span class="lbl">Ajouter à mon agenda</span>`
     + `<a class="pill" href="${esc(googleTemplateUrl(ev))}" target="_blank" rel="noopener">${ICON.out}Google Agenda</a>`
     + `<button class="pill" data-action="ics" data-id="${esc(ev.id)}">${ICON.down}Apple / Outlook</button></div>`,
+    img ? 'has-img' : '',
   );
 }
 
@@ -825,6 +900,15 @@ board.addEventListener('touchend', e => {
 }, { passive: true });
 
 new ResizeObserver(() => requestAnimationFrame(fitAll)).observe(grid);
+
+// Image introuvable ou bloquée : on la retire sans bruit et on ne la redemande plus
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  BROKEN_IMAGES.add(img.getAttribute('src'));
+  img.closest('.ag-ev, .dlg')?.classList.remove('has-img');
+  (img.closest('.thumb, .d-img') || img).remove();
+}, true);
 document.fonts?.ready.then(fitAll);
 
 /* ── Démarrage ─────────────────────────────────────────────────── */
@@ -861,7 +945,8 @@ function demoItems(g) {
     timed('comite', mon[0], [18, 30], [20, 0], 'Réunion du comité', { colorId: '8' });
     timed('rando', sat[0], [9, 0], [15, 30], 'Randonnée au mont Saint-Bruno', {
       colorId: '10', location: 'Parc national du Mont-Saint-Bruno',
-      description: '<b>Apportez</b> un lunch, de l’eau et de bonnes chaussures.<br>Covoiturage depuis le métro Longueuil.<br><br>Inscription : <a href="https://example.com/inscription">formulaire en ligne</a>',
+      description: '<b>Apportez</b> un lunch, de l’eau et de bonnes chaussures.<br>Covoiturage depuis le métro Longueuil.<br><br>Inscription : <a href="https://example.com/inscription">formulaire en ligne</a>'
+        + `<br>Image&nbsp;: <a href="${DEMO_IMAGE}">${DEMO_IMAGE}</a>`,
     });
     timed('atelier', thu[1], [18, 30], [21, 0], 'Atelier : cuisines du monde', { colorId: '6', location: 'Cuisine collective, rue Ontario Est' });
     allDay('weekend', fri[2], 3, 'Fin de semaine en Charlevoix', { colorId: '7', location: 'Baie-Saint-Paul', description: 'Départ vendredi matin, retour dimanche soir. Hébergement en gîte.' });
@@ -872,7 +957,9 @@ function demoItems(g) {
     timed('visite', busy, [14, 0], [16, 0], 'Visite guidée du Vieux-Montréal', { colorId: '9', location: 'Place d’Armes, Montréal' });
     timed('apero', busy, [17, 0], [18, 30], 'Apéro des membres', { colorId: '4' });
     timed('soiree', busy, [21, 0], [1, 0], 'Soirée dansante', { colorId: '3', location: 'Salle communautaire du Plateau' });
-    timed('cine', wed[3] || wed[2], [19, 30], [22, 0], 'Ciné-club : cinéma québécois', { colorId: '1' });
+    timed('cine', wed[3] || wed[2], [19, 30], [22, 0], 'Ciné-club : cinéma québécois', {
+      colorId: '1', description: `Projection suivie d’une discussion.\nImage : ${DEMO_IMAGE}`,
+    });
     timed('prive', thu[0], [13, 0], [17, 0], 'Location de salle', { visibility: 'private' });
     allDay('prive-j', mon[2], 1, undefined, { visibility: 'private' });
   }

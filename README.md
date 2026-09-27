@@ -46,6 +46,15 @@ Ajouter un bloc **Code** (ou **Intégrer**) avec :
 La grille remplit toute la hauteur de l'iframe : plus l'iframe est haute, plus les cases des journées sont grandes.
 Sous 700 px de large (mobile), la page passe en mini-calendrier suivi de la liste des activités du mois.
 
+## Dans Google Agenda
+
+- **Activité privée** : réglez la visibilité de l'événement sur **« Privé »**. Le public ne voit que le créneau,
+  affiché « Réservé ». Les organisateurs voient toujours tous les détails.
+- **Image** : ajoutez une ligne `Image : https://…` dans la description, avec l'adresse directe d'une image
+  (ou le lien de partage d'une image Google Drive partagée à « Tous les utilisateurs disposant du lien »).
+  Cette ligne n'est pas affichée ; l'image apparaît en grand dans la fiche de l'activité, et en miniature dans
+  la grille quand l'activité est seule dans sa journée. Une image introuvable est simplement ignorée.
+
 ## Personnalisation
 
 - **Couleurs, police, arrondis** : variables CSS en haut de `index.html` (`--accent`, `--bg`, `--font`, `--row-min`…).
