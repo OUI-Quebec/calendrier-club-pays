@@ -107,6 +107,12 @@
   .ev .dot { grid-row: 1; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
   .ev .t { grid-column: 2; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; font-variant-numeric: tabular-nums; color: var(--muted); }
   .ev.timed .n { grid-column: 2; }
+  /* Lieu : nom court sous le titre */
+  .ev .l { display: flex; align-items: center; gap: 3px; min-width: 0; font-size: 10.5px; color: var(--muted); }
+  .ev.timed .l { grid-column: 2 / -1; }
+  .ev .l svg { flex: none; width: 10px; height: 10px; }
+  .ev .l span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .events.no-loc .ev .l { display: none; }
   /* Journée entière : bandeau teinté */
   .ev.allday { display: block; padding: 3px 7px; background: color-mix(in srgb, var(--c) 18%, var(--bg)); }
   button.ev.allday:hover { background: color-mix(in srgb, var(--c) 26%, var(--bg)); }
@@ -545,9 +551,17 @@ function chip({ ev, pos }, now, today) {
   }
   if (isPast(ev, now, today)) cls.push('past');
   const time = timeLabel(ev, pos);
-  const tip = time ? `${time} · ${ev.title}` : ev.title;
+  const tip = [time, ev.title, ev.location].filter(Boolean).join(' · ');
   return eventTag(ev, cls.join(' '), ` title="${esc(tip)}"`,
-    (time ? `<i class="dot"></i><span class="t">${time}</span>` : '') + `<span class="n">${esc(ev.title)}</span>`);
+    (time ? `<i class="dot"></i><span class="t">${time}</span>` : '') + `<span class="n">${esc(ev.title)}</span>`
+    + (ev.location ? `<span class="l">${ICON.pin}<span>${esc(shortPlace(ev.location))}</span></span>` : ''));
+}
+
+// Nom court du lieu pour la grille : « Parc Lafontaine, 3933 av. du Parc-La Fontaine » → « Parc Lafontaine ».
+// Une adresse québécoise (« 6900, rue Saint-Hubert, … ») garde son numéro et sa rue.
+function shortPlace(location) {
+  const parts = location.split(',').map(s => s.trim()).filter(Boolean);
+  return /^\d+\s*[a-z]?$/i.test(parts[0] || '') ? parts.slice(0, 2).join(', ') : parts[0] || location;
 }
 
 const hasImage = ev => ev.image && !BROKEN_IMAGES.has(ev.image);
@@ -627,39 +641,35 @@ function paint(g, data) {
   fitAll();
 }
 
-// Ajuste chaque case : titres sur deux lignes si possible, sinon une ligne,
-// sinon masque les derniers événements derrière « + N autres ».
-// La miniature occupe la place restante, et disparaît si elle devient trop petite.
+// Ajuste chaque case, de la présentation la plus riche à la plus compacte :
+// titres sur deux lignes et lieux, puis titres sur une ligne, puis sans les lieux.
+// La miniature occupe la place restante ; si elle devient trop petite, on y renonce.
+// En dernier recours, les derniers événements passent derrière « + N autres ».
 const THUMB_MIN = 44;
+const LEVELS = [['wrap'], [], ['wrap', 'no-loc'], ['no-loc']];
 function fitAll() {
   if (compact.matches) return;
   const fits = list => list.scrollHeight <= list.clientHeight + 1;
+  const tryLevels = (list, thumb) => LEVELS.some(level => {
+    list.classList.toggle('wrap', level.includes('wrap'));
+    list.classList.toggle('no-loc', level.includes('no-loc'));
+    return fits(list) && (!thumb || thumb.clientHeight >= THUMB_MIN);
+  });
   for (const list of grid.querySelectorAll('.events')) {
     const chips = list.querySelectorAll('.ev'), more = list.lastElementChild, thumb = list.querySelector('.thumb');
     if (!chips.length) continue;
     chips.forEach(c => c.classList.remove('is-hidden'));
     thumb?.classList.remove('is-hidden');
     more.classList.add('is-hidden');
-    list.classList.add('wrap');
-    if (!fits(list)) {
-      list.classList.remove('wrap');
-      if (!fits(list)) {
-        more.classList.remove('is-hidden');
-        for (let i = chips.length - 1, hidden = 1; i >= 0; i--, hidden++) {
-          chips[i].classList.add('is-hidden');
-          more.textContent = `+${NB}${hidden}${NB}autre${hidden > 1 ? 's' : ''}`;
-          if (fits(list)) break;
-        }
-      }
+    if (thumb && tryLevels(list, thumb)) continue;
+    thumb?.classList.add('is-hidden');
+    if (tryLevels(list)) continue;
+    more.classList.remove('is-hidden');
+    for (let i = chips.length - 1, hidden = 1; i >= 0; i--, hidden++) {
+      chips[i].classList.add('is-hidden');
+      more.textContent = `+${NB}${hidden}${NB}autre${hidden > 1 ? 's' : ''}`;
+      if (fits(list)) break;
     }
-    if (!thumb || thumb.clientHeight >= THUMB_MIN) continue;
-    // Trop petite : on tente le titre sur une ligne, sinon on renonce à la miniature
-    if (list.classList.contains('wrap')) {
-      list.classList.remove('wrap');
-      if (thumb.clientHeight >= THUMB_MIN) continue;
-      list.classList.add('wrap');
-    }
-    thumb.classList.add('is-hidden');
   }
 }
 
